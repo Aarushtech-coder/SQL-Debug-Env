@@ -1,4 +1,5 @@
 import os
+import time
 from fastapi import APIRouter, HTTPException, Request
 from routers.state import get_env, get_multi_env, sessions, multi_sessions
 from models import SQLAction
@@ -17,6 +18,20 @@ except ImportError:
     HAS_DYNAMIC = False
 
 router = APIRouter()
+
+
+def _sync_multi_env(multi: MultiStepSQLEnv) -> None:
+    """Align the multi-step wrapper with an already-reset base environment."""
+    task = multi.base_env.current_task
+    multi.current_step = 0
+    multi.history = []
+    multi.cumulative_reward = 0.0
+    multi.session_state = {
+        "session_id": getattr(multi.base_env, "_episode_id", f"session_{time.time()}"),
+        "buggy_query": getattr(task, "broken_query", ""),
+        "action_history": multi.history,
+        "step_count": 0,
+    }
 
 @router.post("/reset")
 async def reset_env(request: Request):
@@ -43,7 +58,7 @@ async def reset_env(request: Request):
             sid = session_id or "default"
             sessions[sid] = dynamic_env
             multi_sessions[sid] = MultiStepSQLEnv(dynamic_env)
-            multi_sessions[sid].reset(task_id=task_id)
+            _sync_multi_env(multi_sessions[sid])
             result = obs.model_dump()
             result["mode"] = "dynamic"
             result["note"] = "This scenario was randomly generated. Use seed for reproducibility."
@@ -56,7 +71,9 @@ async def reset_env(request: Request):
         obs = env.reset(task_id=task_id)
 
         multi = get_multi_env(session_id)
-        multi.reset(task_id=task_id)
+        if multi.base_env is not env:
+            multi.base_env = env
+        _sync_multi_env(multi)
 
         return obs.model_dump()
     except HTTPException:

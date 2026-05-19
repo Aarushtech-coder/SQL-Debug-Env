@@ -1,4 +1,5 @@
 import os
+import time
 from fastapi import APIRouter, HTTPException, Request
 from routers.state import sessions, multi_sessions
 from environment import get_metrics
@@ -17,6 +18,19 @@ except ImportError:
     HAS_ADVERSARIAL = False
 
 router = APIRouter()
+
+
+def _sync_multi_env(multi: MultiStepSQLEnv) -> None:
+    task = multi.base_env.current_task
+    multi.current_step = 0
+    multi.history = []
+    multi.cumulative_reward = 0.0
+    multi.session_state = {
+        "session_id": getattr(multi.base_env, "_episode_id", f"session_{time.time()}"),
+        "buggy_query": getattr(task, "broken_query", ""),
+        "action_history": multi.history,
+        "step_count": 0,
+    }
 
 @router.get("/metrics")
 def metrics():
@@ -97,7 +111,7 @@ async def generate_adversarial_challenge(request: Request):
 
         sessions[sid] = adv_env
         multi_sessions[sid] = MultiStepSQLEnv(adv_env)
-        multi_sessions[sid].reset(task_id="adversarial_seed")
+        _sync_multi_env(multi_sessions[sid])
 
         result = obs.model_dump()
         result["mode"] = "adversarial"

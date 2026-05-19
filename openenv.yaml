@@ -36,7 +36,7 @@ tasks:
     reward_range: [0.0, 1.0]
 
 server:
-  entry_point: server.app:main
+  entry_point: main:main
 
 endpoints:
   reset: POST /reset

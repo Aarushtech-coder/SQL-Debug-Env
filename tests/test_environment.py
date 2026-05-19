@@ -286,6 +286,34 @@ class TestSessionIsolation:
         assert env1.step_count == 1
         assert env2.step_count == 0
 
+    def test_http_reset_observation_matches_stepped_task(self):
+        """The REST reset response must describe the same task that /step grades."""
+        from fastapi.testclient import TestClient
+        from main import app
+        from local_solver import solve_observation
+
+        client = TestClient(app)
+        response = client.post(
+            "/reset",
+            json={"task_id": "hard", "session_id": "consistency_check"},
+        )
+        assert response.status_code == 200
+        obs = response.json()
+        sql = solve_observation(obs)
+
+        step_response = client.post(
+            "/step",
+            json={
+                "session_id": "consistency_check",
+                "type": "run_sql",
+                "sql": sql,
+                "reasoning": "consistency regression test",
+            },
+        )
+        assert step_response.status_code == 200
+        correctness = step_response.json()["reward"]["correctness"]
+        assert correctness == 1.0
+
 # =============================================================================
 # Advanced Hackathon Features Tests
 # =============================================================================

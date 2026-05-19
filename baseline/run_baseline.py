@@ -2,8 +2,13 @@ import os
 import json
 import time
 import asyncio
+import sys
+from pathlib import Path
 import httpx
 from openai import AsyncOpenAI
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from local_solver import solve_observation
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
@@ -22,22 +27,46 @@ SERVER_URL = os.environ.get("SERVER_URL", "http://localhost:7860")
 
 
 async def run_task(task_id: str) -> float:
-    if client is None:
-        return {
-            "score": 0.01,
-            "error": "No API key set. Set GROQ_API_KEY or OPENAI_API_KEY.",
-            "task_id": task_id,
-        }
-
     try:
         async with httpx.AsyncClient() as http_client:
-            r = await http_client.post(f"{SERVER_URL}/reset", json={"task_id": task_id}, timeout=30)
+            session_id = f"baseline_{task_id}_{int(time.time() * 1000)}"
+            r = await http_client.post(
+                f"{SERVER_URL}/reset",
+                json={"task_id": task_id, "session_id": session_id},
+                timeout=30,
+            )
             if r.status_code != 200:
                 print(f"Reset failed: {r.status_code}")
                 return 0.01
 
             obs = r.json()
             if not obs.get("task_id"):
+                return 0.01
+
+            if client is None:
+                sql = solve_observation(obs)
+                action = {
+                    "type": "run_sql",
+                    "sql": sql,
+                    "reasoning": "deterministic local baseline",
+                    "session_id": session_id,
+                }
+                step_r = await http_client.post(
+                    f"{SERVER_URL}/step", json=action, timeout=60
+                )
+                if step_r.status_code != 200:
+                    print(f"Step failed: {step_r.status_code}")
+                    return 0.01
+                grader_r = await http_client.get(
+                    f"{SERVER_URL}/grader",
+                    params={"session_id": session_id},
+                    timeout=30,
+                )
+                if grader_r.status_code == 200:
+                    return round(
+                        max(0.01, min(0.99, float(grader_r.json().get("score", 0.01)))),
+                        4,
+                    )
                 return 0.01
 
             messages = [
@@ -62,8 +91,6 @@ async def run_task(task_id: str) -> float:
             done = False
             steps = 0
             max_steps = 10
-
-            session_id = obs.get("session_id")
 
             while not done and steps < max_steps:
                 steps += 1
@@ -155,7 +182,7 @@ async def run_all_tasks() -> dict:
 
 if __name__ == "__main__":
     print("Starting baseline agent...")
-    print(f"Model: {MODEL}")
+    print(f"Model: {MODEL or 'local-deterministic'}")
     print(f"Server: {SERVER_URL}")
     print("=" * 40)
 
@@ -168,6 +195,6 @@ if __name__ == "__main__":
         if isinstance(score, dict):
             print(f"  {task:<10} : ERROR - {score.get('error')}")
         else:
-            bar = "█" * int(score * 20)
+            bar = "#" * int(score * 20)
             print(f"  {task:<10} : {score:.4f}  {bar}")
     print("=" * 40)
