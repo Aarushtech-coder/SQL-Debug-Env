@@ -1,0 +1,47 @@
+# Virtual environment
+venv/
+
+# IDE settings
+.vscode/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Local output/scores
+baseline_scores.json
+
+# Environment variables / secrets
+.env
+*.env
+
+# OS files
+.DS_Store
+Thumbs.db
+
+*.db-shm
+*.db-wal
+
+databases/*.db
+outputs/trajectories/
+
+baseline_scores.py
+
+# Debug/reference output files (internal use only)
+edge_cases_output.txt
+grader_output.txt
+milestone_output.txt
+*_output.txt
+
+# Debug/test scripts (internal use only, root level only)
+debug_*.py
+stress_test.py
+/test_*.py
+
+# Lock files & caches
+
+.pytest_cache/
+
+# Streamlit secrets
+.streamlit/secrets.toml
