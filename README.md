@@ -4,7 +4,6 @@ emoji: "tools"
 colorFrom: blue
 colorTo: green
 sdk: docker
-pinned: false
 ---
 
 # SQL Debug Environment
