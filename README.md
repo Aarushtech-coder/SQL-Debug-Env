@@ -199,7 +199,3 @@ the core claim of the current implementation.
 - Aarush: core environment and API
 - Chetanya: task design and grading
 - Aryan: deployment and baseline agent
-
-## License
-
-MIT
